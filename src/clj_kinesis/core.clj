@@ -5,15 +5,20 @@
            [com.amazonaws.auth DefaultAWSCredentialsProviderChain]
            [com.amazonaws.services.kinesis.clientlibrary.lib.worker Worker Worker$Builder KinesisClientLibConfiguration]))
 
-
+(defn- record-processing-fn [deserialise-fn msg-processing-fn]
+  (fn [record]
+    ; what if deserialise or msg-processing fails???
+    (-> record
+        (wrapping-exceptions decode)
+        (wrapping-exceptions deserialise-fn)
+        (wrapping-exceptions msg-processing-fn))))
 
 (defn- record-processor [processing-fn]
   (reify IRecordProcessor
     (initialize [this initializationInput])
     (processRecords [this processRecordsInput]
-      (let [records (.getRecords processRecordsInput) 
-            record-processing-fn (decode-and processing-fn)]
-        (map record-processing-fn records)))
+      (let [records (.getRecords processRecordsInput)]
+        (map processing-fn records)))
     (shutdown [this shutdownInput])))
 
 (defn- record-processor-factory [processing-fn]
@@ -35,13 +40,7 @@
       ((fn [input] (.getData input)))
       ((fn [input] (.array input)))))
 
-(defn- record-processing-fn [deserialise-fn msg-processing-fn]
-  (fn [record]
-    ; what if deserialise or msg-processing fails???
-    (-> record
-        (wrapping-exceptions decode)
-        (wrapping-exceptions deserialise-fn)
-        (wrapping-exceptions msg-processing-fn))))
+
 
 (defn- client-config [application-name stream-name worker-id region]
   (->
